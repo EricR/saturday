@@ -200,7 +200,7 @@ func (s *Solver) SolveMany(ps []int, mCount uint) [][]int {
 
 	for i := 0; i < int(mCount); i++ {
 		if s.Solve(ps) {
-			s.logger.Printf("Found %d/%d model", i+1, mCount)
+			s.logger.Printf("Found %d/%d models", i+1, mCount)
 
 			models = append(models, s.Answer())
 			constrs := s.constrs
