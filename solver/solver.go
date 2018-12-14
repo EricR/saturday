@@ -5,8 +5,8 @@ import (
 	"github.com/ericr/saturday/config"
 	"github.com/ericr/saturday/lit"
 	"github.com/ericr/saturday/tribool"
-	"math"
 	"log"
+	"math"
 	"sort"
 )
 
@@ -200,7 +200,7 @@ func (s *Solver) SolveMany(ps []int, mCount uint) [][]int {
 
 	for i := 0; i < int(mCount); i++ {
 		if s.Solve(ps) {
-			s.logger.Printf("Found %d/%d model", i + 1, mCount)
+			s.logger.Printf("Found %d/%d model", i+1, mCount)
 
 			models = append(models, s.Answer())
 			constrs := s.constrs
@@ -255,7 +255,7 @@ func (s *Solver) Answer() []int {
 	sort.Slice(ps, func(i, j int) bool {
 		i, j = ps[i], ps[j]
 
-		if i< 0 {
+		if i < 0 {
 			i = -i
 		}
 		if j < 0 {
