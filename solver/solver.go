@@ -223,7 +223,6 @@ func (s *Solver) SolveMany(ps []int, mCount uint) [][]int {
 			break
 		}
 	}
-
 	return models
 }
 
@@ -378,6 +377,7 @@ func (s *Solver) search(params searchParams) tribool.Tribool {
 				return tribool.True
 			}
 
+			// Simplify problem clauses.
 			if s.decisionLevel() == 0 {
 				s.simplifyDB()
 			}
@@ -428,17 +428,11 @@ func (s *Solver) reduceDB() {
 
 	s.sortLearnts()
 
-	for i, j = 0, 0; i < s.NLearnts()/2; i++ {
-		if !s.learnts[i].locked() {
-			s.learnts[i].remove()
-		} else {
-			s.learnts[j] = s.learnts[i]
-			j++
-		}
-	}
-	for ; i < len(s.learnts); i++ {
-		if !s.learnts[i].locked() && s.learnts[i].activity < lim {
-			s.learnts[i].remove()
+	for i, j = 0, 0; i < s.NLearnts(); i++ {
+		c := s.learnts[i]
+
+		if c.Len() > 2 && !c.locked() && (i < s.NLearnts()/2 || c.activity < lim) {
+			c.remove()
 		} else {
 			s.learnts[j] = s.learnts[i]
 			j++
@@ -617,7 +611,7 @@ func (s *Solver) varRescaleActivity() {
 func (s *Solver) claBumpActivity(c *Clause) {
 	c.activity += s.claInc
 
-	if c.activity+s.claInc > 1e100 {
+	if c.activity+s.claInc > 1e20 {
 		s.claRescaleActivity()
 	}
 }
@@ -630,9 +624,9 @@ func (s *Solver) claDecayActivity() {
 // claRescaleActivity rescales clause activity.
 func (s *Solver) claRescaleActivity() {
 	for i := 0; i < s.NLearnts(); i++ {
-		s.learnts[i].activity *= 1e-100
+		s.learnts[i].activity *= 1e-20
 	}
-	s.claInc *= 1e-100
+	s.claInc *= 1e-20
 }
 
 // decayActivities calls both activity decay functions.
@@ -644,7 +638,7 @@ func (s *Solver) decayActivities() {
 // sortLearnts sorts learnts by activity.
 func (s *Solver) sortLearnts() {
 	sort.Slice(s.learnts, func(i, j int) bool {
-		return s.learnts[i].activity > s.learnts[i].activity
+		return s.learnts[i].activity < s.learnts[i].activity
 	})
 }
 
