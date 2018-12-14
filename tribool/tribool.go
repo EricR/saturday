@@ -5,11 +5,11 @@ type Tribool uint8
 
 const (
 	// True state
-	True = Tribool(0)
+	Undef = Tribool(0)
 	// False state
-	False = Tribool(1)
+	True = Tribool(1)
 	// Undefined state
-	Undef = Tribool(2)
+	False = Tribool(2)
 )
 
 // NewFromBool returns a tribool from a given boolean value.

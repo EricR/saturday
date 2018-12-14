@@ -21,25 +21,24 @@ func newClause(s *Solver, lits []lit.Lit, learnt bool) (bool, *Clause) {
 		lits:   lits,
 		learnt: learnt,
 	}
-	sort.Sort(c)
-
 	if !learnt {
+		// Sort literals so we can easily detect tautologies.
+		sort.Sort(c)
+
 		idx := 0
 		last := lit.Undef
 
+		// Normalize clause.
 		for _, p := range c.lits {
 			switch {
 			case s.litValue(p).True():
-				// Return on literal already true.
-				c.solver.logger.Printf("Literal %s already true", p)
-				return true, nil
+				// Return on clause already true.
+				return true, c
 			case p == last.Not():
 				// Return on tautology.
-				c.solver.logger.Printf("Tautology detected for %s", p)
-				return true, nil
+				return true, c
 			case s.litValue(p).False():
-				// Remove false literal.
-				c.solver.logger.Printf("Skipping false literal %s", p)
+				// Remove false literals.
 				continue
 			}
 			c.lits[idx] = p
@@ -52,18 +51,16 @@ func newClause(s *Solver, lits []lit.Lit, learnt bool) (bool, *Clause) {
 	switch c.Len() {
 	case 0:
 		// Return with conflict on empty clause.
-		return false, nil
+		return false, c
 	case 1:
 		// Unit detected, enqueue it.
-		c.solver.logger.Print("Unit detected")
-
-		return s.enqueue(c.lits[0], c), nil
+		return s.enqueue(c.lits[0], c), c
 	}
 
 	if learnt {
 		// Pick a second literal to watch.
-		idx := c.highestDecisionLevelIdx()
-		c.lits[1], c.lits[idx] = c.lits[idx], c.lits[1]
+		maxIdx := c.highestDecisionLevelIdx()
+		c.lits[1], c.lits[maxIdx] = c.lits[maxIdx], c.lits[1]
 
 		// Newly learnt clauses are considered active.
 		c.solver.claBumpActivity(c)
@@ -72,22 +69,36 @@ func newClause(s *Solver, lits []lit.Lit, learnt bool) (bool, *Clause) {
 			c.solver.varBumpActivity(c.lits[i])
 		}
 	}
-
+	// Watch the clause.
 	c.addToWatcher(c.lits[0].Not())
 	c.addToWatcher(c.lits[1].Not())
 
 	return true, c
 }
 
-// locked returns true if the clause is locked.
-func (c *Clause) locked() bool {
-	return c.solver.reason[c.lits[0]] == c
+// String implements the Stringer interface.
+func (c *Clause) String() string {
+	return strings.Join(c.asStrings(), ",")
 }
 
-// remove removes the clause from the solver.
-func (c *Clause) remove() {
-	c.removeFromWatcher(c.lits[0].Not())
-	c.removeFromWatcher(c.lits[1].Not())
+// Len returns the length of the clause.
+func (c *Clause) Len() int {
+	return len(c.lits)
+}
+
+// Swap swaps two literals within the clause.
+func (c *Clause) Swap(i, j int) {
+	c.lits[i], c.lits[j] = c.lits[j], c.lits[i]
+}
+
+// Less compares two literals within the clause.
+func (c *Clause) Less(i, j int) bool {
+	return c.lits[i] < c.lits[j]
+}
+
+// locked returns true if the clause is locked.
+func (c *Clause) locked() bool {
+	return c.solver.reason[c.lits[0].Index()] == c
 }
 
 // simplify attempts to simplify the clause.
@@ -98,7 +109,7 @@ func (c *Clause) simplify() bool {
 		if c.solver.litValue(c.lits[i]).True() {
 			return true
 		}
-		// Don't copy false literals
+		// Don't copy undefined literals.
 		if c.solver.litValue(c.lits[i]).Undef() {
 			c.lits[j] = c.lits[i]
 			j++
@@ -119,7 +130,6 @@ func (c *Clause) propagate(p lit.Lit) bool {
 	// If 0th watch is true, then the clause is already satisfied. We just need
 	// to reinsert it into the watch list.
 	if c.solver.litValue(c.lits[0]).True() {
-		c.solver.logger.Printf("Clause already satisfied: %s", c)
 		c.addToWatcher(p)
 
 		return true
@@ -134,7 +144,6 @@ func (c *Clause) propagate(p lit.Lit) bool {
 		}
 	}
 	// Clause is unit under assignment.
-	c.solver.logger.Printf("Clause is unit: %s", c)
 	c.addToWatcher(p)
 
 	return c.solver.enqueue(c.lits[0], c)
@@ -199,22 +208,21 @@ func (c *Clause) asStrings() []string {
 	return litStrs
 }
 
-// String implements the Stringer interface.
-func (c *Clause) String() string {
-	return strings.Join(c.asStrings(), ",")
+// asInts returns a clause as an array of integers.
+func (c *Clause) asInts() []int {
+	litInts := []int{}
+
+	for _, l := range c.lits {
+		litInts = append(litInts, l.Int())
+	}
+	return litInts
 }
 
-// Len returns the length of the clause.
-func (c *Clause) Len() int {
-	return len(c.lits)
-}
-
-// Swap swaps two literals within the clause.
-func (c *Clause) Swap(i, j int) {
-	c.lits[i], c.lits[j] = c.lits[j], c.lits[i]
-}
-
-// Less compares two literals within the clause.
-func (c *Clause) Less(i, j int) bool {
-	return c.lits[i] < c.lits[j]
+// remove removes the clause from the solver.
+func (c *Clause) remove() {
+	for i := 0; i < 2; i++ {
+		if c.Len() > i {
+			c.removeFromWatcher(c.lits[i].Not())
+		}
+	}
 }

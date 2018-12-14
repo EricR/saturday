@@ -29,6 +29,9 @@ func TestQueueDequeue(t *testing.T) {
 	if o := q.Dequeue(); o != lit3 {
 		t.Fatalf("TestQueueInsert() failed, got: %s", o)
 	}
+	if len(q.items) != 0 {
+		t.Fatalf("TestQueueInsert() failed: didn't remove items")
+	}
 }
 
 func TestQueueClear(t *testing.T) {

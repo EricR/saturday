@@ -49,6 +49,14 @@ func (l Lit) Var() int {
 	return int(l>>1) + 1
 }
 
+// Int returns the literal as an integer.
+func (l Lit) Int() int {
+	if l.Sign() {
+		return -l.Var()
+	}
+	return l.Var()
+}
+
 // String implements the Stringer interface.
 func (l Lit) String() string {
 	if l.Sign() {
