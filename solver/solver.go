@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/ericr/saturday/config"
 	"github.com/ericr/saturday/lit"
+	"github.com/ericr/saturday/order"
 	"github.com/ericr/saturday/tribool"
 	"log"
 	"math"
@@ -17,7 +18,9 @@ const (
 
 // Solver is the SAT solver.
 type Solver struct {
+	// config is the solver's configuration
 	config *config.Config
+	// logger is the solver's logger
 	logger *log.Logger
 
 	// Model Database Fields
@@ -49,7 +52,7 @@ type Solver struct {
 	// varDecay is the decay factor for variable activity.
 	varDecay float64
 	// order keeps track of dynamic variable ordering.
-	order *varOrder
+	order *order.Order
 
 	// Propagation Fields
 
@@ -127,7 +130,7 @@ func New(c *config.Config) *Solver {
 		reason:       []*Clause{},
 		level:        []int{},
 	}
-	s.order = newVarOrder(&s.assigns, &s.activity)
+	s.order = order.New(&s.assigns, &s.activity)
 
 	return s
 }
@@ -164,7 +167,7 @@ func (s *Solver) Solve(ps []int) bool {
 	if !s.simplifyDB() {
 		return false
 	}
-	s.order.init()
+	s.order.Init()
 
 	for _, p := range ps {
 		assump := lit.NewFromInt(p)
@@ -316,330 +319,9 @@ func (s *Solver) newVar(p lit.Lit) lit.Lit {
 		s.assigns = append(s.assigns, tribool.Undef)
 		s.level = append(s.level, -1)
 		s.activity = append(s.activity, float64(0))
-		s.order.newVar()
+		s.order.NewVar()
 	}
 	return lit.New(s.userVars[p.Var()], p.Sign())
-}
-
-// search assumes and propagates until a conflict is found. When this happens,
-// the conflict is learnt and backtracking is performed until the search can
-// continue.
-func (s *Solver) search(params searchParams) tribool.Tribool {
-	// Update decay vars from search params.
-	s.varDecay = 1 / params.varDecay
-	s.claDecay = 1 / params.claDecay
-
-	// Reset model and number of conflicts.
-	s.model = map[int]bool{}
-	nConflicts := 0
-
-	for {
-		if confl := s.propagate(); confl != nil {
-			// Conflict detected.
-			nConflicts++
-			s.conflicts++
-
-			// No more decisions can be made.
-			if s.decisionLevel() == s.rootLevel {
-				return tribool.False
-			}
-
-			// Analyze the conflict and produce a learnt clause.
-			learntClause, backtrackLevel := s.analyze(confl)
-
-			// Perform backtracking.
-			if backtrackLevel > s.rootLevel {
-				s.cancelUntil(backtrackLevel)
-			} else {
-				s.cancelUntil(s.rootLevel)
-			}
-
-			// Record new learnt clause.
-			s.record(learntClause)
-
-			// Update heuristics.
-			s.decayActivities()
-			s.maxLearntsCtr -= 1
-			if s.maxLearntsCtr == 0 {
-				s.maxLearntsCtrInc *= s.maxLearntsCtrIncGrowth
-				s.maxLearntsCtr = int(s.maxLearntsCtrInc)
-				s.maxLearnts *= s.maxLearntsGrowth
-			}
-		} else {
-			// No conflict detected.
-			if s.NAssigns() == s.NVars() {
-				// All vars are assigned with no conflicts, so we know we have a model.
-				for i := 0; i < s.NVars(); i++ {
-					s.model[s.internalVars[i]] = s.assigns[i] == tribool.True
-				}
-				s.cancelUntil(s.rootLevel)
-
-				return tribool.True
-			}
-
-			// Simplify problem clauses.
-			if s.decisionLevel() == 0 {
-				s.simplifyDB()
-			}
-
-			// Check if maxLearnts has been reached, and if so reduce the DB.
-			if s.NLearnts()-s.NAssigns() >= int(s.maxLearnts) {
-				s.reduceDB()
-			}
-
-			// Force a restart if max conflicts is reached, else decide on a new var.
-			if nConflicts >= int(s.maxConflicts) {
-				s.cancelUntil(s.rootLevel)
-
-				return tribool.Undef
-			} else {
-				s.assume(lit.NewFromInt(s.order.Choose()))
-				s.decisions++
-			}
-		}
-	}
-}
-
-// simplifyDB can be called before solve() and simplifies the constraint
-// database. If a top-level conflict is found, returns false.
-func (s *Solver) simplifyDB() bool {
-	if s.propagate() != nil {
-		return false
-	}
-	j := 0
-	for i := 0; i < s.NLearnts(); i++ {
-		if s.learnts[i].simplify() {
-			s.learnts[i].remove()
-		} else {
-			s.learnts[j] = s.learnts[i]
-			j++
-		}
-	}
-	s.learnts = s.learnts[:j]
-
-	return true
-}
-
-// reduceDB removes half of the learnt clauses minus some locked clauses.
-func (s *Solver) reduceDB() {
-	i := 0
-	j := 0
-	lim := s.claInc / float64(s.NLearnts())
-
-	s.sortLearnts()
-
-	for i, j = 0, 0; i < s.NLearnts(); i++ {
-		c := s.learnts[i]
-
-		if c.Len() > 2 && !c.locked() && (i < s.NLearnts()/2 || c.activity < lim) {
-			c.remove()
-		} else {
-			s.learnts[j] = s.learnts[i]
-			j++
-		}
-	}
-	s.learnts = s.learnts[:j]
-}
-
-// enqueue puts a new fact, p, into the propagation queue.
-func (s *Solver) enqueue(p lit.Lit, from *Clause) bool {
-	// Check if the fact isn't new first.
-	if s.litValue(p) != tribool.Undef {
-		if s.litValue(p).False() {
-			// Conflicting assignment.
-			return false
-		} else {
-			// Consistent assignment already exists.
-			return true
-		}
-	}
-	// Fact is new, store and enqueue it.
-	s.assigns[p.Index()] = tribool.NewFromBool(!p.Sign())
-	s.level[p.Index()] = s.decisionLevel()
-	s.reason[p.Index()] = from
-	s.trail = append(s.trail, p)
-	s.propQ.Insert(p)
-
-	return true
-}
-
-// propagate propagates all enqueued facts.
-func (s *Solver) propagate() *Clause {
-	for s.propQ.Size() > 0 {
-		p := s.propQ.Dequeue()
-
-		tmp := s.watches[p]
-		s.watches[p] = []*Clause{}
-		s.propagations++
-
-		for i := 0; i < len(tmp); i++ {
-			// Check for conflict.
-			if !(tmp[i].propagate(p)) {
-				for j := i + 1; j < len(tmp); j++ {
-					s.watches[p] = append(s.watches[p], tmp[j])
-				}
-				s.propQ.Clear()
-
-				return tmp[i]
-			}
-		}
-	}
-	return nil
-}
-
-// analyze performs analysis on a conflict, returning the reason and the level
-// to backtrack to (highest level in conflict clause).
-func (s *Solver) analyze(confl *Clause) ([]lit.Lit, int) {
-	seen := make([]bool, s.NVars())
-	p := lit.Undef
-	learnts := []lit.Lit{lit.Undef}
-	counter := 0
-	btLevel := 0
-
-	for {
-		pReason := confl.calcReason(p)
-		// Trace reason for p.
-		for j := 0; j < len(pReason); j++ {
-			q := pReason[j]
-
-			if !seen[q.Index()] {
-				seen[q.Index()] = true
-				level := s.level[q.Index()]
-
-				switch {
-				case level == s.decisionLevel():
-					counter++
-				case level > 0:
-					learnts = append(learnts, q)
-
-					// Keep track of highest level to return.
-					if level > btLevel {
-						btLevel = level
-					}
-				}
-			}
-		}
-		// Select the next literal to look at.
-		for {
-			p = s.trail[s.NAssigns()-1]
-
-			confl = s.reason[p.Index()]
-			s.undoOne()
-
-			if seen[p.Index()] {
-				break
-			}
-		}
-		counter--
-		if counter == 0 {
-			break
-		}
-	}
-	learnts[0] = p.Not()
-
-	return learnts, btLevel
-}
-
-// record records a new learnt clause.
-func (s *Solver) record(lits []lit.Lit) {
-	_, c := newClause(s, lits, true)
-	s.enqueue(lits[0], c)
-
-	if c != nil {
-		s.learnts = append(s.learnts, c)
-	}
-}
-
-// assume assumes a literal, returning false if immediate conflict.
-func (s *Solver) assume(p lit.Lit) bool {
-	s.trailLim = append(s.trailLim, s.NAssigns())
-
-	return s.enqueue(p, nil)
-}
-
-// undoOne unbinds the last assigned variable.
-func (s *Solver) undoOne() {
-	p := s.trail[s.NAssigns()-1]
-
-	s.assigns[p.Index()] = tribool.Undef
-	s.reason[p.Index()] = nil
-	s.level[p.Index()] = -1
-	s.trail = s.trail[:s.NAssigns()-1]
-	s.order.push(p.Index())
-}
-
-// cancel reverts all variable assignments since the last decision level.
-func (s *Solver) cancel() {
-	c := s.NAssigns() - s.trailLim[s.decisionLevel()-1]
-	for ; c > 0; c-- {
-		s.undoOne()
-	}
-	s.trailLim = s.trailLim[:s.decisionLevel()-1]
-}
-
-// cancelUntil cancels all variable assignments since the referenced level.
-func (s *Solver) cancelUntil(level int) {
-	for s.decisionLevel() > level {
-		s.cancel()
-	}
-}
-
-// varBumpActivity bumps a variable's activity.
-func (s *Solver) varBumpActivity(p lit.Lit) {
-	s.activity[p.Index()] += s.varInc
-
-	if s.activity[p.Index()] > 1e100 {
-		s.varRescaleActivity()
-	}
-	s.order.fix(p.Index())
-}
-
-// varDecayActivity applies decay to varInc.
-func (s *Solver) varDecayActivity() {
-	s.varInc *= s.varDecay
-}
-
-// varRescaleActivity rescales var activity.
-func (s *Solver) varRescaleActivity() {
-	for i := 0; i < s.NVars(); i++ {
-		s.activity[i] *= 1e-100
-	}
-	s.varInc *= 1e-100
-}
-
-// claBumpActivity bumps a clause's activity.
-func (s *Solver) claBumpActivity(c *Clause) {
-	c.activity += s.claInc
-
-	if c.activity+s.claInc > 1e20 {
-		s.claRescaleActivity()
-	}
-}
-
-// claDecayActivity applies decay to claInc.
-func (s *Solver) claDecayActivity() {
-	s.claInc *= s.claDecay
-}
-
-// claRescaleActivity rescales clause activity.
-func (s *Solver) claRescaleActivity() {
-	for i := 0; i < s.NLearnts(); i++ {
-		s.learnts[i].activity *= 1e-20
-	}
-	s.claInc *= 1e-20
-}
-
-// decayActivities calls both activity decay functions.
-func (s *Solver) decayActivities() {
-	s.varDecayActivity()
-	s.claDecayActivity()
-}
-
-// sortLearnts sorts learnts by activity.
-func (s *Solver) sortLearnts() {
-	sort.Slice(s.learnts, func(i, j int) bool {
-		return s.learnts[i].activity < s.learnts[i].activity
-	})
 }
 
 // litValue returns p's value.
@@ -651,9 +333,4 @@ func (s *Solver) litValue(p lit.Lit) tribool.Tribool {
 		return s.assigns[p.Index()].Not()
 	}
 	return s.assigns[p.Index()]
-}
-
-// decisionLevel returns a solver's decision level.
-func (s *Solver) decisionLevel() int {
-	return len(s.trailLim)
 }
