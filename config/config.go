@@ -6,16 +6,14 @@ import (
 )
 
 type Config struct {
-	Logger     *log.Logger
-	OutputPath string
-	VarDecay   float64
-	ClaDecay   float64
-	Models     uint
-	Verbose    bool
+	Logger   *log.Logger
+	VarDecay float64
+	ClaDecay float64
+	Models   uint
 }
 
 func New() *Config {
 	return &Config{
-		Logger: log.New(os.Stdout, "", log.Ldate|log.Ltime),
+		Logger: log.New(os.Stderr, "", log.Ldate|log.Ltime),
 	}
 }

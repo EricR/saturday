@@ -143,10 +143,8 @@ func Version() string {
 // Solve accepts a list of constraints and solves the SAT problem, returning
 // true when satisfactory and false when unsatisfactory.
 func (s *Solver) Solve(ps []int) bool {
-	s.logger.Print("Starting solver")
-
 	assumps := []lit.Lit{}
-	params := searchParams{0.95, 0.999}
+	params := searchParams{s.config.VarDecay, s.config.ClaDecay}
 	status := tribool.Undef
 
 	// Set values for activity algorithm.

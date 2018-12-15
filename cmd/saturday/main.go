@@ -25,18 +25,22 @@ func main() {
 	for _, clause := range sentences {
 		sat.AddClause(clause)
 	}
+	conf.Logger.Printf("Starting Saturday %s solver", solver.Version())
+
 	tStart := time.Now()
 	models := solve(sat, conf)
-	tEnd := time.Now()
 
-	displayStats(sat, tEnd.Sub(tStart))
+	conf.Logger.Print("Finished solving")
+
+	displayStats(sat, time.Now().Sub(tStart))
 
 	if len(models) == 0 {
-		fmt.Println("UNSAT")
-		os.Exit(0)
+		fmt.Fprint(os.Stdout, "p UNSAT\n")
+		os.Exit(3)
 	}
-	fmt.Println("SAT")
+	fmt.Fprint(os.Stdout, "p SAT\n")
 	displayModels(models)
+	os.Exit(0)
 }
 
 func solve(sat *solver.Solver, conf *config.Config) [][]int {
@@ -52,28 +56,26 @@ func solve(sat *solver.Solver, conf *config.Config) [][]int {
 func displayModels(models [][]int) {
 	for _, model := range models {
 		for _, p := range model {
-			fmt.Printf("%d ", p)
+			fmt.Fprintf(os.Stdout, "%d ", p)
 		}
-		fmt.Print("0\n")
+		fmt.Fprint(os.Stdout, "0\n")
 	}
 }
 
 func displayStats(s *solver.Solver, t time.Duration) {
-	fmt.Println("")
-	fmt.Printf("Time Taken:    %fs\n", t.Seconds())
-	fmt.Printf("Variables:     %d\n", s.NVars())
-	fmt.Printf("Constraints:   %d\n", s.NConstrs())
-	fmt.Printf("Conflicts:     %d\n", s.NConflicts())
-	fmt.Printf("Propagations:  %d\n", s.NPropagations())
-	fmt.Printf("Restarts:      %d\n", s.NRestarts())
-	fmt.Printf("Decisions:     %d\n", s.NDecisions())
-	fmt.Println("")
+	fmt.Fprint(os.Stderr, "\n")
+	fmt.Fprintf(os.Stderr, "Time Taken:    %fs\n", t.Seconds())
+	fmt.Fprintf(os.Stderr, "Variables:     %d\n", s.NVars())
+	fmt.Fprintf(os.Stderr, "Constraints:   %d\n", s.NConstrs())
+	fmt.Fprintf(os.Stderr, "Conflicts:     %d\n", s.NConflicts())
+	fmt.Fprintf(os.Stderr, "Propagations:  %d\n", s.NPropagations())
+	fmt.Fprintf(os.Stderr, "Restarts:      %d\n", s.NRestarts())
+	fmt.Fprintf(os.Stderr, "Decisions:     %d\n", s.NDecisions())
+	fmt.Fprint(os.Stderr, "\n")
 }
 
 func parseFlags(c *config.Config) {
-	flag.BoolVar(&c.Verbose, "v", false, "enable verbose output")
 	flag.UintVar(&c.Models, "m", uint(1), "number of models to find")
-	flag.StringVar(&c.OutputPath, "o", "", "output path to write results to")
 	flag.Float64Var(&c.VarDecay, "decay-var", 0.95, "variable decay constant")
 	flag.Float64Var(&c.VarDecay, "decay-cla", 0.999, "clause decay constant")
 	flag.Usage = flagUsage
@@ -86,7 +88,7 @@ func parseFlags(c *config.Config) {
 }
 
 func flagUsage() {
-	fmt.Fprintf(os.Stderr, "Usage: solver input.cnf [args]"+
+	fmt.Fprintf(os.Stderr, "Usage: saturday input.cnf [args]"+
 		"\n\nValid Arguments:\n")
 	flag.PrintDefaults()
 }
