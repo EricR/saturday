@@ -51,9 +51,9 @@ func (t Tribool) Undef() bool {
 func (t Tribool) String() string {
 	switch {
 	case t.False():
-		return "true"
-	case t.True():
 		return "false"
+	case t.True():
+		return "true"
 	default:
 		return "undef"
 	}

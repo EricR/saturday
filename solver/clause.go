@@ -40,10 +40,15 @@ func newClause(s *Solver, lits []lit.Lit, learnt bool) (bool, *Clause) {
 			case s.litValue(p).False():
 				// Remove false literals.
 				continue
+			case p == last:
+				// Remove duplicates.
+				continue
 			}
-			c.lits[idx] = p
-			last = p
-			idx++
+			if p != last {
+				c.lits[idx] = p
+				last = p
+				idx++
+			}
 		}
 		c.lits = c.lits[:idx]
 	}
@@ -101,22 +106,6 @@ func (c *Clause) locked() bool {
 	return c.solver.reason[c.lits[0].Index()] == c
 }
 
-// calcReason returns the reason p was propagated.
-func (c *Clause) calcReason(p lit.Lit) []lit.Lit {
-	outReason := []lit.Lit{}
-	offset := 1
-	if c.solver.litValue(p).Undef() {
-		offset = 0
-	}
-	for i := offset; i < c.Len(); i++ {
-		outReason = append(outReason, c.lits[i].Not())
-	}
-	if c.learnt {
-		c.solver.claBumpActivity(c)
-	}
-	return outReason
-}
-
 // addToWatcher adds this clause to p's watch list.
 func (c *Clause) addToWatcher(p lit.Lit) {
 	c.solver.watches[p] = append(c.solver.watches[p], c)
@@ -126,9 +115,9 @@ func (c *Clause) addToWatcher(p lit.Lit) {
 func (c *Clause) removeFromWatcher(p lit.Lit) {
 	for idx, clause := range c.solver.watches[p] {
 		if clause == c {
-			nWatches := len(c.solver.watches[p])
-			c.solver.watches[p][idx] = c.solver.watches[p][nWatches-1]
-			c.solver.watches[p] = c.solver.watches[p][:nWatches-1]
+			ridx := len(c.solver.watches[p])-1
+			c.solver.watches[p][idx] = c.solver.watches[p][ridx]
+			c.solver.watches[p] = c.solver.watches[p][:ridx]
 		}
 	}
 }

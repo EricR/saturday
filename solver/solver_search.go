@@ -50,6 +50,7 @@ func (s *Solver) search(params searchParams) tribool.Tribool {
 			// Update heuristics.
 			s.decayActivities()
 			s.maxLearntsCtr -= 1
+
 			if s.maxLearntsCtr == 0 {
 				s.maxLearntsCtrInc *= s.maxLearntsCtrIncGrowth
 				s.maxLearntsCtr = int(s.maxLearntsCtrInc)
@@ -57,15 +58,6 @@ func (s *Solver) search(params searchParams) tribool.Tribool {
 			}
 		} else {
 			// No conflict detected.
-			if s.NAssigns() == s.NVars() {
-				// All vars are assigned with no conflicts, so we know we have a model.
-				for i := 0; i < s.NVars(); i++ {
-					s.model[s.internalVars[i]] = s.assigns[i] == tribool.True
-				}
-				s.cancelUntil(s.rootLevel)
-
-				return tribool.True
-			}
 
 			// Simplify problem clauses.
 			if s.decisionLevel() == 0 {
@@ -77,15 +69,25 @@ func (s *Solver) search(params searchParams) tribool.Tribool {
 				s.reduceDB()
 			}
 
-			// Force a restart if max conflicts is reached, else decide on a new var.
+			if s.NAssigns() == s.NVars() {
+				// All vars are assigned with no conflicts, so we know we have a model.
+				for i := 0; i < s.NVars(); i++ {
+					s.model[s.internalVars[i]] = s.assigns[i] == tribool.True
+				}
+				s.cancelUntil(s.rootLevel)
+
+				return tribool.True
+			}
+
+			// Force a restart if max conflicts is reached
 			if nConflicts >= int(s.maxConflicts) {
 				s.cancelUntil(s.rootLevel)
 
 				return tribool.Undef
-			} else {
-				s.assume(lit.NewFromInt(s.order.Choose()))
-				s.decisions++
 			}
+			// Decide on a new variable.
+			s.assume(lit.NewFromInt(s.order.Choose()))
+			s.decisions++
 		}
 	}
 }

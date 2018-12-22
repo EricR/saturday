@@ -148,8 +148,8 @@ func (s *Solver) Solve(ps []int) bool {
 	status := tribool.Undef
 
 	// Set values for activity algorithm.
-	s.varInc = 1
-	s.claInc = 1
+	s.varInc = 1.0
+	s.claInc = 1.0
 
 	// Set values for the maxLearnts growth algorithm.
 	s.maxLearnts = float64(s.NConstrs()) / 3.0

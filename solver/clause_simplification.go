@@ -8,7 +8,7 @@ func (c *Clause) simplify() bool {
 		if c.solver.litValue(c.lits[i]).True() {
 			return true
 		}
-		// Don't copy undefined literals.
+		// Don't copy false literals.
 		if c.solver.litValue(c.lits[i]).Undef() {
 			c.lits[j] = c.lits[i]
 			j++

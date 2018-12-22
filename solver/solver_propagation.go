@@ -31,8 +31,8 @@ func (s *Solver) enqueue(p lit.Lit, from *Clause) bool {
 func (s *Solver) propagate() *Clause {
 	for s.propQ.Size() > 0 {
 		p := s.propQ.Dequeue()
-
 		tmp := s.watches[p]
+		
 		s.watches[p] = []*Clause{}
 		s.propagations++
 

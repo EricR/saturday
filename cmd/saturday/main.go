@@ -35,10 +35,10 @@ func main() {
 	displayStats(sat, time.Now().Sub(tStart))
 
 	if len(models) == 0 {
-		fmt.Fprint(os.Stdout, "p UNSAT\n")
+		fmt.Fprint(os.Stderr, "UNSAT\n")
 		os.Exit(3)
 	}
-	fmt.Fprint(os.Stdout, "p SAT\n")
+	fmt.Fprint(os.Stderr, "SAT\n")
 	displayModels(models)
 	os.Exit(0)
 }
@@ -64,13 +64,13 @@ func displayModels(models [][]int) {
 
 func displayStats(s *solver.Solver, t time.Duration) {
 	fmt.Fprint(os.Stderr, "\n")
-	fmt.Fprintf(os.Stderr, "Time Taken:    %fs\n", t.Seconds())
-	fmt.Fprintf(os.Stderr, "Variables:     %d\n", s.NVars())
-	fmt.Fprintf(os.Stderr, "Constraints:   %d\n", s.NConstrs())
-	fmt.Fprintf(os.Stderr, "Conflicts:     %d\n", s.NConflicts())
-	fmt.Fprintf(os.Stderr, "Propagations:  %d\n", s.NPropagations())
-	fmt.Fprintf(os.Stderr, "Restarts:      %d\n", s.NRestarts())
-	fmt.Fprintf(os.Stderr, "Decisions:     %d\n", s.NDecisions())
+	fmt.Fprintf(os.Stderr, "Time Taken   : %fs\n", t.Seconds())
+	fmt.Fprintf(os.Stderr, "Variables    : %d\n", s.NVars())
+	fmt.Fprintf(os.Stderr, "Constraints  : %d\n", s.NConstrs())
+	fmt.Fprintf(os.Stderr, "Conflicts    : %d\n", s.NConflicts())
+	fmt.Fprintf(os.Stderr, "Propagations : %d\n", s.NPropagations())
+	fmt.Fprintf(os.Stderr, "Restarts     : %d\n", s.NRestarts())
+	fmt.Fprintf(os.Stderr, "Decisions    : %d\n", s.NDecisions())
 	fmt.Fprint(os.Stderr, "\n")
 }
 

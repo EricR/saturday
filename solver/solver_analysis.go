@@ -25,7 +25,7 @@ func (s *Solver) analyze(confl *Clause) ([]lit.Lit, int) {
 				case level == s.decisionLevel():
 					counter++
 				case level > 0:
-					learnts = append(learnts, q)
+					learnts = append(learnts, q.Not())
 
 					// Keep track of highest level to return.
 					if level > btLevel {
@@ -37,8 +37,8 @@ func (s *Solver) analyze(confl *Clause) ([]lit.Lit, int) {
 		// Select the next literal to look at.
 		for {
 			p = s.trail[s.NAssigns()-1]
-
 			confl = s.reason[p.Index()]
+
 			s.undoOne()
 
 			if seen[p.Index()] {

@@ -3,10 +3,10 @@ package lit
 import "testing"
 
 func TestNewFromInt(t *testing.T) {
-	if lit := NewFromInt(12); lit.Var() != 12 {
+	if lit := NewFromInt(1); lit.Var() != 1 {
 		t.Fatalf("TestNewFromInt() failed, got: %d", lit.Var())
 	}
-	if lit := NewFromInt(-12); lit.Var() != 12 {
+	if lit := NewFromInt(-2); lit.Var() != 2 {
 		t.Fatalf("TestNewFromInt() failed, got: %d", lit.Var())
 	}
 }

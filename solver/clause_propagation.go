@@ -30,3 +30,19 @@ func (c *Clause) propagate(p lit.Lit) bool {
 
 	return c.solver.enqueue(c.lits[0], c)
 }
+
+// calcReason returns the reason p was propagated.
+func (c *Clause) calcReason(p lit.Lit) []lit.Lit {
+	outReason := []lit.Lit{}
+	offset := 1
+	if c.solver.litValue(p).Undef() {
+		offset = 0
+	}
+	for i := offset; i < c.Len(); i++ {
+		outReason = append(outReason, c.lits[i].Not())
+	}
+	if c.learnt {
+		c.solver.claBumpActivity(c)
+	}
+	return outReason
+}
